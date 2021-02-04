@@ -14,7 +14,7 @@ class Structure extends Command
      *
      * @var string
      */
-    protected $signature = 'aanyszek:structure {table}';
+    protected $signature = 'aanyszek:structure {table?}';
 
     /**
      * The console command description.
@@ -39,7 +39,7 @@ class Structure extends Command
      */
     public function handle()
     {
-        $table = $this->argument('table');
+        $table = $this->getTableName();
 
         $this->info('Model annotations:');
         $this->modelAnnotations($table);
@@ -142,17 +142,18 @@ class Structure extends Command
     private function typeSearch($DBType)
     {
         $types = [
-            'bigint'     => 'int',
-            'varchar'    => 'string',
-            'char'       => 'string',
-            'int'        => 'int',
-            'date'       => 'Carbon',
-            'timestamp'  => 'Carbon',
-            'json'       => 'array',
-            'enum'       => 'string',
-            'set'        => 'string',
-            'tinyint(1)' => 'boolean',
-            'text'       => 'string',
+            'bigint'           => 'int',
+            'varchar'          => 'string',
+            'char'             => 'string',
+            'int'              => 'int',
+            'date'             => 'Carbon',
+            'timestamp'        => 'Carbon',
+            'json'             => 'array',
+            'enum'             => 'string',
+            'set'              => 'string',
+            'tinyint(1)'       => 'boolean',
+            'tinyint unsigned' => 'boolean',
+            'text'             => 'string',
         ];
 
         foreach ($types as $key => $value) {
@@ -161,7 +162,7 @@ class Structure extends Command
             }
 
         }
-        return "-DBType-";
+        return "--$DBType--";
     }
 
     /**
@@ -183,6 +184,24 @@ class Structure extends Command
         }
 
         return null;
+    }
+
+    private function getTableName()
+    {
+        $table = $this->argument('table');
+
+        if (!is_null($table)) {
+            return $table;
+        }
+
+        $tables     = DB::select('SHOW TABLES');
+        $tableNames = [];
+        foreach ($tables as $table) {
+            foreach ($table as $key => $value)
+                $tableNames[] = $value;
+        }
+
+        return $this->choice('Choose table:', $tableNames);
     }
 
 }
