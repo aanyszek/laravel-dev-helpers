@@ -1,0 +1,32 @@
+{
+  "name": "aanyszek/laravel-dev-helpers",
+  "description": "Laravel helpers for dev",
+  "type": "laravel-library",
+  "keywords": [
+    "framework",
+    "laravel",
+    "laravel5"
+  ],
+  "license": "MIT",
+  "require": {
+  },
+  "authors": [
+    {
+      "name": "Artur Anyszek",
+      "email": "a.anyszek@linux.pl"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "AAnyszek\\LaravelDevHelpers\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "AAnyszek\\LaravelDevHelpers\\PackageServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "dev"
+}
