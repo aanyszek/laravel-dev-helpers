@@ -83,7 +83,7 @@ class Structure extends Command
     private function resources($table)
     {
         $className = $this->getClassNameFromTable($table);
-        $schema    = DB::getSchemaBuilder()->getColumnListing($table);
+        $schema    = DB::select("describe $table");
 
         if ($className) {
             echo "/** @var \\$className \$model */\n";
@@ -96,7 +96,7 @@ class Structure extends Command
          */
         echo "\t // db columns \n";
         foreach ($schema as $column) {
-            echo "\t'$column' => \$model->$column,\n";
+            echo "\t'{$column->Field}'\t=> \$model->{$column->Field},\n";
         }
 
         /**
@@ -118,8 +118,13 @@ class Structure extends Command
     private function getModelAttributes($table)
     {
         $className = $this->getClassNameFromTable($table);
-        $methods   = get_class_methods($className);
-        $r         = [];
+
+        if (is_null($className)) {
+            return [];
+        }
+
+        $methods = get_class_methods($className);
+        $r       = [];
         if ($methods) {
             foreach ($methods as $methodName) {
                 if (Str::startsWith($methodName, 'get') && Str::endsWith($methodName, 'Attribute')) {
@@ -146,14 +151,17 @@ class Structure extends Command
             'varchar'          => 'string',
             'char'             => 'string',
             'int'              => 'int',
+            'tinyint'          => 'boolean',
+            'tinyint(1)'       => 'boolean',
+            'tinyint unsigned' => 'boolean',
             'date'             => 'Carbon',
             'timestamp'        => 'Carbon',
             'json'             => 'array',
             'enum'             => 'string',
             'set'              => 'string',
-            'tinyint(1)'       => 'boolean',
-            'tinyint unsigned' => 'boolean',
             'text'             => 'string',
+            'mediumtext'       => 'string',
+            'longtext'         => 'string',
         ];
 
         foreach ($types as $key => $value) {
