@@ -3,6 +3,7 @@
 
 namespace AAnyszek\LaravelDevHelpers\Commands;
 
+use AAnyszek\LaravelDevHelpers\ModelRelationReflection;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -53,7 +54,7 @@ class Structure extends Command
      */
     private function modelAnnotations($table)
     {
-        $schema = DB::select("describe $table");
+        $schema = DB::select("describe {$table}");
 
         /**
          * From db
@@ -61,19 +62,28 @@ class Structure extends Command
         echo " * db columns \n";
         foreach ($schema as $column) {
             $type = $this->typeSearch($column->Type);
-            echo " * @property $type " . $column->Field . "\n";
+            echo " * @property {$type} {$column->Field} \n";
         }
 
         /**
          * From attributes
          */
+        $modelAttributes = $this->getModelAttributes($table);
+
         echo " * attributes \n";
-        foreach ($this->getModelAttributes($table) as $attribute) {
-            echo " * @property mixed $attribute\n";
+        foreach ($modelAttributes['attributes'] as $attribute) {
+            echo " * @property mixed {$attribute}\n";
         }
 
         echo " * relations \n";
+        foreach ($modelAttributes['relations'] as $name => $relation) {
+            echo " * @property {$relation} {$name} \n";
+        }
+
         echo " * scopes \n";
+        foreach ($modelAttributes['scopes'] as $attribute) {
+            echo " * @property static self {$attribute}\n";
+        }
     }
 
     /**
@@ -83,7 +93,7 @@ class Structure extends Command
     private function resources($table)
     {
         $className = $this->getClassNameFromTable($table);
-        $schema    = DB::select("describe $table");
+        $schema = DB::select("describe {$table}");
 
         if ($className) {
             echo "/** @var \\$className \$model */\n";
@@ -96,15 +106,17 @@ class Structure extends Command
          */
         echo "\t // db columns \n";
         foreach ($schema as $column) {
-            echo "\t'{$column->Field}'\t=> \$model->{$column->Field},\n";
+            echo "\t'{$column->Field}' => \$model->{$column->Field},\n";
         }
 
         /**
          * From attributes
          */
+        $modelAttributes = $this->getModelAttributes($table);
+
         echo "\t // attributes \n";
-        foreach ($this->getModelAttributes($table) as $attribute) {
-            echo "\t'$attribute' => \$model->$attribute,\n";
+        foreach ($modelAttributes['attributes'] as $attribute) {
+            echo "\t'{$attribute}' => \$model->{$attribute},\n";
         }
         echo "\t // relations \n";
         echo "];\n";
@@ -120,23 +132,42 @@ class Structure extends Command
         $className = $this->getClassNameFromTable($table);
 
         if (is_null($className)) {
-            return [];
+            return [
+                'attirbutes' => [],
+                'scopes' => [],
+                'relations' => [],
+            ];
         }
 
-        $methods = get_class_methods($className);
-        $r       = [];
-        if ($methods) {
-            foreach ($methods as $methodName) {
-                if (Str::startsWith($methodName, 'get') && Str::endsWith($methodName, 'Attribute')) {
-                    $method = Str::substr($methodName, 3, -9);
-                    if ($method) {
-                        $r[] = Str::snake($method);
-                    }
+        $ref = new \ReflectionClass($className);
+
+        $attirbutes = [];
+        $scopes = [];
+        $relations = [];
+
+        /** @var \ReflectionMethod $reflectionMethod */
+        foreach ($ref->getMethods() as $reflectionMethod) {
+            if (Str::startsWith($reflectionMethod->name, 'get') && Str::endsWith($reflectionMethod->name, 'Attribute')) {
+                $method = Str::substr($reflectionMethod->name, 3, -9);
+                if ($method) {
+                    $attirbutes[] = Str::snake($method);
+                }
+            } elseif (Str::startsWith($reflectionMethod->name, 'scope')) {
+                $method = Str::substr($reflectionMethod->name, 5);
+                $scopes[] = lcfirst($method) . '()';
+            } elseif (!$reflectionMethod->isStatic() && $reflectionMethod->isPublic()) {
+                $modelRelation = (new ModelRelationReflection($reflectionMethod))->get();
+
+                if ($modelRelation) {
+                    $relations[$modelRelation['name']] = $modelRelation['relation'];
                 }
             }
         }
-
-        return $r;
+        return [
+            'attributes' => $attirbutes,
+            'scopes' => $scopes,
+            'relations' => $relations,
+        ];
     }
 
     /**
@@ -147,21 +178,23 @@ class Structure extends Command
     private function typeSearch($DBType)
     {
         $types = [
-            'bigint'           => 'int',
-            'varchar'          => 'string',
-            'char'             => 'string',
-            'int'              => 'int',
-            'tinyint'          => 'boolean',
-            'tinyint(1)'       => 'boolean',
+            'bigint' => 'int',
+            'varchar' => 'string',
+            'char' => 'string',
+            'int' => 'int',
+            'tinyint' => 'boolean',
+            'tinyint(1)' => 'boolean',
+            'tinyint(6)' => 'int',
+            'smallint(6)' => 'int',
             'tinyint unsigned' => 'boolean',
-            'date'             => 'Carbon',
-            'timestamp'        => 'Carbon',
-            'json'             => 'array',
-            'enum'             => 'string',
-            'set'              => 'string',
-            'text'             => 'string',
-            'mediumtext'       => 'string',
-            'longtext'         => 'string',
+            'date' => 'Carbon',
+            'timestamp' => 'Carbon',
+            'json' => 'array',
+            'enum' => 'string',
+            'set' => 'string',
+            'text' => 'string',
+            'mediumtext' => 'string',
+            'longtext' => 'string',
         ];
 
         foreach ($types as $key => $value) {
@@ -170,7 +203,7 @@ class Structure extends Command
             }
 
         }
-        return "--$DBType--";
+        return "--{$DBType}--";
     }
 
     /**
@@ -202,7 +235,7 @@ class Structure extends Command
             return $table;
         }
 
-        $tables     = DB::select('SHOW TABLES');
+        $tables = DB::select('SHOW TABLES');
         $tableNames = [];
         foreach ($tables as $table) {
             foreach ($table as $key => $value)
@@ -211,5 +244,4 @@ class Structure extends Command
 
         return $this->choice('Choose table:', $tableNames);
     }
-
 }
